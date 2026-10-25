@@ -6,12 +6,16 @@
 
 <br/>
 
+<table>
+  <tr>
+    <td align="center" width="130"><img src="https://cdn.jsdelivr.net/gh/devicons/devicon@v2.16.0/icons/microsoftsqlserver/microsoftsqlserver-original.svg" width="52" height="52" alt="SQL Server"/><br/><sub><b>SQL Server 2022</b><br/>T-SQL · SQL Agent</sub></td>
+    <td align="center" width="130"><img src="https://cdn.jsdelivr.net/gh/devicons/devicon@v2.16.0/icons/python/python-original.svg" width="52" height="52" alt="Python"/><br/><sub><b>Python 3.11</b><br/>seeding · charts</sub></td>
+    <td align="center" width="130"><img src="https://cdn.jsdelivr.net/gh/devicons/devicon@v2.16.0/icons/pytest/pytest-original.svg" width="52" height="52" alt="pytest"/><br/><sub><b>pytest</b><br/>8 end-to-end tests</sub></td>
+    <td align="center" width="130"><img src="https://cdn.jsdelivr.net/gh/devicons/devicon@v2.16.0/icons/githubactions/githubactions-original.svg" width="52" height="52" alt="GitHub Actions"/><br/><sub><b>GitHub Actions</b><br/>CI</sub></td>
+  </tr>
+</table>
+
 [![CI](https://github.com/DavidFarm/loan-profit-etl/actions/workflows/ci.yml/badge.svg)](https://github.com/DavidFarm/loan-profit-etl/actions/workflows/ci.yml)
-![SQL Server 2022](https://img.shields.io/badge/SQL_Server_2022-CC2927?style=for-the-badge&logo=microsoftsqlserver&logoColor=white)
-![T-SQL](https://img.shields.io/badge/T--SQL-4DB6AC?style=for-the-badge)
-![Python](https://img.shields.io/badge/Python_3.11-3776AB?style=for-the-badge&logo=python&logoColor=white)
-![SQL Agent](https://img.shields.io/badge/SQL_Agent-scheduled-555?style=for-the-badge)
-![Riksbank API](https://img.shields.io/badge/Riksbank_API-open_data-005B99?style=for-the-badge)
 
 </div>
 
