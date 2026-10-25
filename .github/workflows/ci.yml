@@ -56,7 +56,3 @@ jobs:
 
       - name: Run tests
         run: pytest tests -v
-
-      - name: Lint T-SQL (informational)
-        continue-on-error: true
-        run: sqlfluff lint sql --dialect tsql

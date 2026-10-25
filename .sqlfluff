@@ -1,4 +1,0 @@
-[sqlfluff]
-dialect = tsql
-max_line_length = 140
-exclude_rules = AM04, LT05
