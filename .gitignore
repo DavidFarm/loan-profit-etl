@@ -1,0 +1,9 @@
+.venv/
+__pycache__/
+.pytest_cache/
+.env
+# Downloaded/generated data and the course brief (not mine to redistribute)
+data/
+Documents/
+*.eml
+*.docx

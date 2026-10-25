@@ -1,0 +1,187 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Loan Profit ETL presentation</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Lato:wght@400;700;900&display=swap" rel="stylesheet">
+<style>
+  @page { size: 1920px 1080px; margin: 0; }
+  :root { --dark:#1f2a25; --mint:#6fcf8f; --ink:#1b2420; --green:#2f7d4f; --body:#4a544f; --paper:#f6f7f3; --card:#eaf0ea; --red:#b3261e; }
+  * { box-sizing: border-box; margin: 0; }
+  body { font-family: 'Lato','Segoe UI',Arial,sans-serif; }
+  .slide { width: 1920px; height: 1080px; padding: 90px 120px 70px; position: relative; overflow: hidden; display: flex; flex-direction: column;
+           page-break-after: always; break-after: page; background: var(--paper); color: var(--ink); }
+  .slide.dark { background: var(--dark); color: #fff; }
+  .kicker { font-size: 26px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; color: var(--green); }
+  .dark .kicker { color: var(--mint); }
+  h1 { font-size: 112px; line-height: 1.05; font-weight: 900; letter-spacing: -1.5px; margin-top: 30px; }
+  h2 { font-size: 68px; line-height: 1.1; font-weight: 900; letter-spacing: -.5px; margin-top: 18px; max-width: 1500px; }
+  .acc { color: var(--green); } .dark .acc { color: var(--mint); }
+  p, li { font-size: 34px; line-height: 1.45; color: var(--body); }
+  .dark p { color: #c8d3cc; }
+  p { margin-top: 26px; max-width: 1400px; }
+  .foot { margin-top: auto; display: flex; justify-content: space-between; font-size: 24px; color: #8a948e; }
+  .cols { display: flex; gap: 60px; margin-top: 44px; align-items: flex-start; }
+  .cols > * { flex: 1; }
+  .card { background: var(--card); border: 2px solid #d3dfd3; border-radius: 20px; padding: 28px 36px; }
+  .card.hl { background: #fff; border-color: var(--green); }
+  .label { font-size: 22px; font-weight: 700; letter-spacing: .12em; color: var(--body); text-transform: uppercase; }
+  .big { font-size: 44px; font-weight: 900; margin-top: 6px; line-height: 1.2; color: var(--ink); }
+  .mono { font-family: Consolas,'Courier New',monospace; }
+  table { width: 100%; border-collapse: collapse; font-size: 29px; margin-top: 30px; }
+  th, td { text-align: left; padding: 14px 18px; border-bottom: 2px solid #dfe5dd; vertical-align: top; }
+  th { font-size: 21px; letter-spacing: .1em; text-transform: uppercase; color: var(--body); }
+  td:first-child { font-weight: 700; white-space: nowrap; }
+  .flow { display: flex; align-items: center; gap: 22px; margin-top: 56px; }
+  .node { flex: 1; background: #fff; border: 2px solid #cfdccf; border-radius: 16px; padding: 22px 20px; font-size: 30px; font-weight: 700; text-align: center; }
+  .node small { display: block; font-weight: 400; font-size: 23px; color: var(--body); margin-top: 6px; }
+  .node.g { background: var(--green); border-color: var(--green); color: #fff; } .node.g small { color: #dff3e6; }
+  .arrow { font-size: 44px; color: var(--green); }
+  img.shot { width: 100%; border: 2px solid #d3dfd3; border-radius: 16px; background: #fcfcfb; }
+  ul { list-style: none; padding: 0; margin-top: 30px; } li { position: relative; padding-left: 46px; margin-bottom: 20px; } li b { color: var(--ink); }
+  li::before { content: ''; position: absolute; left: 4px; top: 15px; width: 18px; height: 18px; border-radius: 50%; background: var(--green); }
+</style>
+</head>
+<body>
+
+<section class="slide dark">
+  <div class="kicker">Nackademin · ETL course</div>
+  <h1 style="margin-top:150px">Loan Profit ETL</h1>
+  <h1 class="acc" style="font-size:64px;margin-top:20px;letter-spacing:0">From a Riksbank rate to loan-level profit,<br>on a schedule, with a paper trail.</h1>
+  <p style="margin-top:50px">A monthly SQL Server pipeline: ingest, validate, price, log, confirm.</p>
+  <div class="foot"><span>David Färm · Data Engineering</span><span>github.com/DavidFarm/loan-profit-etl</span></div>
+</section>
+
+<section class="slide">
+  <div class="kicker">The problem</div>
+  <h2>An analyst ran the pricing queries by hand, <span class="acc">every month.</span></h2>
+  <div class="cols">
+    <div>
+      <p style="margin-top:0">A bank receives a vehicle file from an agency each month. Estimated profit per car depends on three things:</p>
+      <ul><li><b>Energy class</b> of the car</li><li><b>Base rate</b>, which floats and changes monthly</li><li><b>Bank margin</b> added on top</li></ul>
+      <p class="mono" style="font-size:32px">profit = price × (base rate + margin) / 100</p>
+    </div>
+    <div>
+      <div class="card"><div class="label">Before</div><div class="big">Manual queries, monthly</div></div>
+      <div class="card hl" style="margin-top:28px"><div class="label">After</div><div class="big mono" style="font-size:38px">SELECT * FROM LoanProfitEstimates_202610;</div></div>
+      <p style="font-size:30px">Plus: logging, a confirmation mail with row counts, and a schedule.</p>
+    </div>
+  </div>
+  <div class="foot"><span>Loan Profit ETL</span><span>2</span></div>
+</section>
+
+<section class="slide">
+  <div class="kicker">Architecture</div>
+  <h2>One stored procedure, <span class="acc">scheduled by SQL Agent.</span></h2>
+  <div class="flow">
+    <div class="node">Agency file<small>CarInformation_yyyymm</small></div><span class="arrow">→</span>
+    <div class="node">Staging<small>raw text, typed beside it</small></div><span class="arrow">→</span>
+    <div class="node">Validate<small>clean, or reject with a reason</small></div><span class="arrow">→</span>
+    <div class="node g">LoanProfitEstimates<br>_yyyymm<small>rebuilt in one transaction</small></div>
+  </div>
+  <div class="flow" style="margin-top:36px">
+    <div class="node">Riksbank API<small>policy rate by month → InterestRates</small></div>
+    <div class="node">EtlLog<small>every step, every warning</small></div>
+    <div class="node">Database Mail<small>outcome, rows, table name</small></div>
+    <div class="node">SQL Agent<small>1st of the month, 06:00</small></div>
+  </div>
+  <p style="margin-top:48px">Dynamic table names for the month, built with <span class="mono">QUOTENAME</span> and parameterised <span class="mono">sp_executesql</span>.</p>
+  <div class="foot"><span>Loan Profit ETL</span><span>3</span></div>
+</section>
+
+<section class="slide">
+  <div class="kicker">Source data</div>
+  <h2>The brief gave no data. <span class="acc">So I sourced it.</span></h2>
+  <table>
+    <tr><th>Data</th><th>Source</th><th>Real?</th></tr>
+    <tr><td>Base interest rate</td><td>Riksbank open API, series SECBREPOEFF (policy rate), one value per month</td><td>Real</td></tr>
+    <tr><td>Models, years, fuel types</td><td>fueleconomy.gov vehicles.csv, mapped to Electric / Hybrid / Gasoline / Diesel</td><td>Real</td></tr>
+    <tr><td>Prices, customer risk tiers</td><td>Generated with a fixed random seed, so every run is reproducible</td><td>Synthetic</td></tr>
+    <tr><td>Bank margins</td><td>From the brief: 1.0 / 1.5 / 2.5 %</td><td>Given</td></tr>
+  </table>
+  <p style="font-size:30px">Each monthly file deliberately contains messy rows: padded and lower-case classes, a missing price, a zero price, an unknown tier, an unknown energy class.</p>
+  <div class="foot"><span>Loan Profit ETL</span><span>4</span></div>
+</section>
+
+<section class="slide">
+  <div class="kicker">Design decisions</div>
+  <h2>Built to fail <span class="acc">in the right way.</span></h2>
+  <table>
+    <tr><th>Decision</th><th>Why</th></tr>
+    <tr><td>Text staging</td><td>A bad value in the file can never fail the load. It is cleaned or rejected with a reason.</td></tr>
+    <tr><td>Rate fallback, logged</td><td>No rate for the month: use the latest earlier one, and say which. No rate at all: hard stop.</td></tr>
+    <tr><td>Transactional rebuild</td><td>The analyst never sees half a table; a failed run leaves last month's result intact.</td></tr>
+    <tr><td>Mail outside the main try/catch</td><td>A broken mail server is a warning, not a failed run.</td></tr>
+    <tr><td>Failures re-thrown</td><td>SQL Agent history shows the job as failed when it is.</td></tr>
+    <tr><td>Re-runnable scripts</td><td>Every script and run is idempotent. Tested.</td></tr>
+  </table>
+  <div class="foot"><span>Loan Profit ETL</span><span>5</span></div>
+</section>
+
+<section class="slide">
+  <div class="kicker">Data quality</div>
+  <h2>180 rows in. 176 out. <span class="acc">4 rejected, and explained.</span></h2>
+  <div style="margin-top:36px"><img class="shot" src="../docs/proof_data_quality.png" alt=""></div>
+  <div class="foot"><span>Loan Profit ETL</span><span>6</span></div>
+</section>
+
+<section class="slide">
+  <div class="kicker">Output</div>
+  <h2>What the analyst gets: <span class="acc">one SELECT.</span></h2>
+  <div style="margin-top:44px"><img class="shot" src="../docs/proof_output.png" alt=""></div>
+  <p style="font-size:30px;margin-top:34px">Every vehicle carries the base rate, the margin for its energy class, the total rate and the estimated profit.</p>
+  <div class="foot"><span>Loan Profit ETL</span><span>7</span></div>
+</section>
+
+<section class="slide">
+  <div class="kicker">Confirmation</div>
+  <h2>And what the team <span class="acc">gets told.</span></h2>
+  <div style="margin-top:34px;width:1250px"><img class="shot" src="../docs/proof_email.png" alt=""></div>
+  <p style="font-size:28px;margin-top:28px">Captured by a local SMTP sink during development, so nothing left the machine.</p>
+  <div class="foot"><span>Loan Profit ETL</span><span>8</span></div>
+</section>
+
+<section class="slide">
+  <div class="kicker">Result</div>
+  <h2>Two 25 bp cuts took <span class="acc">12.4% off estimated profit.</span></h2>
+  <div class="cols" style="gap:50px;margin-top:28px">
+    <div style="flex:2"><img class="shot" src="../docs/rate_sensitivity.png" alt=""></div>
+    <div style="flex:1">
+      <div class="card"><div class="label">Portfolio</div><div class="big">176 vehicles</div></div>
+      <div class="card hl" style="margin-top:24px"><div class="label">Apr 2025 → Oct 2026</div><div class="big">2 910k → 2 548k SEK</div></div>
+      <p style="font-size:28px">A view on top of the pipeline's own tables and formula. Real rates, synthetic prices.</p>
+    </div>
+  </div>
+  <div class="foot"><span>Loan Profit ETL</span><span>9</span></div>
+</section>
+
+<section class="slide">
+  <div class="kicker">Testing and operations</div>
+  <h2>8 end-to-end tests <span class="acc">against a real SQL Server.</span></h2>
+  <table>
+    <tr><th>Scenario</th><th>What it proves</th></tr>
+    <tr><td>Rate present / missing</td><td>Normal run; exact fallback warning with month and value</td></tr>
+    <tr><td>Formula, normalisation</td><td>Profit matches the formula to the öre; " electric " becomes Electric</td></tr>
+    <tr><td>Rejects</td><td>Five bad rows, one per rule, rejected with the right reasons</td></tr>
+    <tr><td>Re-run, missing file, mail failure</td><td>No duplicates; loud failure with nothing created; warning, not failure</td></tr>
+  </table>
+  <p style="font-size:30px">The SQL Agent job succeeded on its first manual start, and is scheduled for the 1st of each month.</p>
+  <div class="foot"><span>Loan Profit ETL</span><span>10</span></div>
+</section>
+
+<section class="slide dark">
+  <div class="kicker">Scope and next steps</div>
+  <h2 style="margin-top:24px">What I'd build <span class="acc">next.</span></h2>
+  <ul style="margin-top:34px">
+    <li style="color:#c8d3cc"><b style="color:#fff">Use the risk tier and depreciation tables.</b> Both are in the data model; the specified formula doesn't use them yet.</li>
+    <li style="color:#c8d3cc"><b style="color:#fff">Alert on failure.</b> Route Agent job failures to an operator, not only to the log.</li>
+    <li style="color:#c8d3cc"><b style="color:#fff">Real SMTP and a service account.</b> The pipeline mails a local sink today.</li>
+    <li style="color:#c8d3cc"><b style="color:#fff">Loan terms.</b> Price by term and amortisation instead of a flat rate.</li>
+  </ul>
+  <p style="font-size:30px;margin-top:40px">Started as an ETL assignment on the Data Engineer programme at Nackademin. The data layer, quality views, tests and CI are my additions.</p>
+  <div class="foot"><span>David Färm · Data Engineering</span><span>github.com/DavidFarm/loan-profit-etl</span></div>
+</section>
+
+</body>
+</html>

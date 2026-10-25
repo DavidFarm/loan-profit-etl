@@ -1,0 +1,154 @@
+[
+  {
+    "month": "2025-04-01",
+    "rate": 2.25,
+    "loans": 176,
+    "estimated_profit": 2910146.54,
+    "rate_change": null,
+    "profit_change": null
+  },
+  {
+    "month": "2025-05-01",
+    "rate": 2.25,
+    "loans": 176,
+    "estimated_profit": 2910146.54,
+    "rate_change": 0.0,
+    "profit_change": 0.0
+  },
+  {
+    "month": "2025-06-01",
+    "rate": 2.25,
+    "loans": 176,
+    "estimated_profit": 2910146.54,
+    "rate_change": 0.0,
+    "profit_change": 0.0
+  },
+  {
+    "month": "2025-07-01",
+    "rate": 2.0,
+    "loans": 176,
+    "estimated_profit": 2729158.26,
+    "rate_change": -0.25,
+    "profit_change": -180988.28
+  },
+  {
+    "month": "2025-08-01",
+    "rate": 2.0,
+    "loans": 176,
+    "estimated_profit": 2729158.26,
+    "rate_change": 0.0,
+    "profit_change": 0.0
+  },
+  {
+    "month": "2025-09-01",
+    "rate": 2.0,
+    "loans": 176,
+    "estimated_profit": 2729158.26,
+    "rate_change": 0.0,
+    "profit_change": 0.0
+  },
+  {
+    "month": "2025-10-01",
+    "rate": 1.75,
+    "loans": 176,
+    "estimated_profit": 2548169.99,
+    "rate_change": -0.25,
+    "profit_change": -180988.27
+  },
+  {
+    "month": "2025-11-01",
+    "rate": 1.75,
+    "loans": 176,
+    "estimated_profit": 2548169.99,
+    "rate_change": 0.0,
+    "profit_change": 0.0
+  },
+  {
+    "month": "2025-12-01",
+    "rate": 1.75,
+    "loans": 176,
+    "estimated_profit": 2548169.99,
+    "rate_change": 0.0,
+    "profit_change": 0.0
+  },
+  {
+    "month": "2026-01-01",
+    "rate": 1.75,
+    "loans": 176,
+    "estimated_profit": 2548169.99,
+    "rate_change": 0.0,
+    "profit_change": 0.0
+  },
+  {
+    "month": "2026-02-01",
+    "rate": 1.75,
+    "loans": 176,
+    "estimated_profit": 2548169.99,
+    "rate_change": 0.0,
+    "profit_change": 0.0
+  },
+  {
+    "month": "2026-03-01",
+    "rate": 1.75,
+    "loans": 176,
+    "estimated_profit": 2548169.99,
+    "rate_change": 0.0,
+    "profit_change": 0.0
+  },
+  {
+    "month": "2026-04-01",
+    "rate": 1.75,
+    "loans": 176,
+    "estimated_profit": 2548169.99,
+    "rate_change": 0.0,
+    "profit_change": 0.0
+  },
+  {
+    "month": "2026-05-01",
+    "rate": 1.75,
+    "loans": 176,
+    "estimated_profit": 2548169.99,
+    "rate_change": 0.0,
+    "profit_change": 0.0
+  },
+  {
+    "month": "2026-06-01",
+    "rate": 1.75,
+    "loans": 176,
+    "estimated_profit": 2548169.99,
+    "rate_change": 0.0,
+    "profit_change": 0.0
+  },
+  {
+    "month": "2026-07-01",
+    "rate": 1.75,
+    "loans": 176,
+    "estimated_profit": 2548169.99,
+    "rate_change": 0.0,
+    "profit_change": 0.0
+  },
+  {
+    "month": "2026-08-01",
+    "rate": 1.75,
+    "loans": 176,
+    "estimated_profit": 2548169.99,
+    "rate_change": 0.0,
+    "profit_change": 0.0
+  },
+  {
+    "month": "2026-09-01",
+    "rate": 1.75,
+    "loans": 176,
+    "estimated_profit": 2548169.99,
+    "rate_change": 0.0,
+    "profit_change": 0.0
+  },
+  {
+    "month": "2026-10-01",
+    "rate": 1.75,
+    "loans": 176,
+    "estimated_profit": 2548169.99,
+    "rate_change": 0.0,
+    "profit_change": 0.0
+  }
+]

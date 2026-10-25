@@ -1,0 +1,62 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  etl-tests:
+    runs-on: ubuntu-22.04
+    env:
+      SQL_SERVER: localhost
+      SQL_DATABASE: LoanETL
+      SQL_UID: sa
+      SQL_PWD: Ci-Throwaway-Passw0rd!
+    services:
+      sqlserver:
+        image: mcr.microsoft.com/mssql/server:2022-latest
+        env:
+          ACCEPT_EULA: "Y"
+          MSSQL_SA_PASSWORD: Ci-Throwaway-Passw0rd!
+        ports:
+          - 1433:1433
+        options: >-
+          --health-cmd "/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P 'Ci-Throwaway-Passw0rd!' -C -Q 'SELECT 1'"
+          --health-interval 10s --health-timeout 5s --health-retries 12 --health-start-period 20s
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install SQL Server client tools
+        run: |
+          curl -sSL https://packages.microsoft.com/config/ubuntu/22.04/packages-microsoft-prod.deb -o ms.deb
+          sudo dpkg -i ms.deb
+          sudo apt-get update
+          sudo ACCEPT_EULA=Y apt-get install -y mssql-tools18 msodbcsql18 unixodbc-dev
+          echo "/opt/mssql-tools18/bin" >> "$GITHUB_PATH"
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: requirements-dev.txt
+
+      - run: pip install -r requirements-dev.txt
+
+      # Scripts 01 (Database Mail) and 04 (SQL Agent job) are server-level and covered by the local setup;
+      # the mail-failure path is exercised by the tests instead.
+      - name: Deploy database objects
+        run: |
+          for f in 00_create_database 02_create_tables 03_usp_LoanProfitEstimates 05_vw_DataQuality 06_vw_RateSensitivity; do
+            echo "== $f"
+            sqlcmd -S localhost -U sa -P "$SQL_PWD" -C -b -I -i "sql/$f.sql"
+          done
+
+      - name: Seed lookups, interest rates and monthly car files
+        run: python python/seed_tables.py
+
+      - name: Run tests
+        run: pytest tests -v
+
+      - name: Lint T-SQL (informational)
+        continue-on-error: true
+        run: sqlfluff lint sql --dialect tsql
