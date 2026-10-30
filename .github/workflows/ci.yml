@@ -52,7 +52,7 @@ jobs:
           done
 
       - name: Seed lookups, interest rates and monthly car files
-        run: python python/seed_tables.py
+        run: python python/seed_tables.py --rate-source ssvx
 
       - name: Run tests
         run: pytest tests -v

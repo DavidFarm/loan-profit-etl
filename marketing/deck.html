@@ -48,7 +48,7 @@
 <section class="slide dark">
   <div class="kicker">Nackademin · ETL course</div>
   <h1 style="margin-top:150px">Loan Profit ETL</h1>
-  <h1 class="acc" style="font-size:64px;margin-top:20px;letter-spacing:0">From a Riksbank rate to loan-level profit,<br>on a schedule, with a paper trail.</h1>
+  <h1 class="acc" style="font-size:64px;margin-top:20px;letter-spacing:0">From STIBOR to loan-level profit,<br>on a schedule, with a paper trail.</h1>
   <p style="margin-top:50px">A monthly SQL Server pipeline: ingest, validate, price, log, confirm.</p>
   <div class="foot"><span>David Färm · Data Engineering</span><span>github.com/DavidFarm/loan-profit-etl</span></div>
 </section>
@@ -59,8 +59,8 @@
   <div class="cols">
     <div>
       <p style="margin-top:0">A bank receives a vehicle file from an agency each month. Estimated profit per car depends on three things:</p>
-      <ul><li><b>Energy class</b> of the car</li><li><b>Base rate</b>, which floats and changes monthly</li><li><b>Bank margin</b> added on top</li></ul>
-      <p class="mono" style="font-size:32px">profit = price × (base rate + margin) / 100</p>
+      <ul><li><b>Energy class</b> of the car</li><li><b>Credit risk tier</b> of the customer</li><li><b>Base rate</b> (STIBOR 3M), which floats and changes monthly</li></ul>
+      <p class="mono" style="font-size:28px">annual profit = price × (STIBOR 3M + energy margin + risk adjustment) / 100</p>
     </div>
     <div>
       <div class="card"><div class="label">Before</div><div class="big">Manual queries, monthly</div></div>
@@ -81,7 +81,7 @@
     <div class="node g">LoanProfitEstimates<br>_yyyymm<small>rebuilt in one transaction</small></div>
   </div>
   <div class="flow" style="margin-top:36px">
-    <div class="node">Riksbank API<small>policy rate by month → InterestRates</small></div>
+    <div class="node">STIBOR 3M<small>SFBF export, by month → InterestRates</small></div>
     <div class="node">EtlLog<small>every step, every warning</small></div>
     <div class="node">Database Mail<small>outcome, rows, table name</small></div>
     <div class="node">SQL Agent<small>1st of the month, 06:00</small></div>
@@ -95,10 +95,10 @@
   <h2>The brief gave no data. <span class="acc">So I sourced it.</span></h2>
   <table>
     <tr><th>Data</th><th>Source</th><th>Real?</th></tr>
-    <tr><td>Base interest rate</td><td>Riksbank open API, series SECBREPOEFF (policy rate), one value per month</td><td>Real</td></tr>
+    <tr><td>Base interest rate</td><td>STIBOR 3M from SFBF (non-commercial education licence): the fixing on the last day of the previous month</td><td>Real</td></tr>
     <tr><td>Models, years, fuel types</td><td>fueleconomy.gov vehicles.csv, mapped to Electric / Hybrid / Gasoline / Diesel</td><td>Real</td></tr>
     <tr><td>Prices, customer risk tiers</td><td>Generated with a fixed random seed, so every run is reproducible</td><td>Synthetic</td></tr>
-    <tr><td>Bank margins</td><td>From the brief: 1.0 / 1.5 / 2.5 %</td><td>Given</td></tr>
+    <tr><td>Bank margins</td><td>Energy margins from the brief: 1.0 / 1.5 / 2.5 %. Risk adjustments and depreciation rates are my assumptions</td><td>Given / assumed</td></tr>
   </table>
   <p style="font-size:30px">Each monthly file deliberately contains messy rows: padded and lower-case classes, a missing price, a zero price, an unknown tier, an unknown energy class.</p>
   <div class="foot"><span>Loan Profit ETL</span><span>4</span></div>
@@ -130,7 +130,7 @@
   <div class="kicker">Output</div>
   <h2>What the analyst gets: <span class="acc">one SELECT.</span></h2>
   <div style="margin-top:44px"><img class="shot" src="../docs/proof_output.png" alt=""></div>
-  <p style="font-size:30px;margin-top:34px">Every vehicle carries the base rate, the margin for its energy class, the total rate and the estimated profit.</p>
+  <p style="font-size:30px;margin-top:34px">Every vehicle carries the base rate, its margin (energy class + credit risk), the total rate and the estimated annual profit, plus its depreciation and minimum amortization.</p>
   <div class="foot"><span>Loan Profit ETL</span><span>7</span></div>
 </section>
 
@@ -144,13 +144,13 @@
 
 <section class="slide">
   <div class="kicker">Result</div>
-  <h2>Two 25 bp cuts took <span class="acc">12.4% off estimated profit.</span></h2>
+  <h2>18 months of STIBOR 3M: <span class="acc">−7.4% estimated annual profit.</span></h2>
   <div class="cols" style="gap:50px;margin-top:28px">
     <div style="flex:2"><img class="shot" src="../docs/rate_sensitivity.png" alt=""></div>
     <div style="flex:1">
       <div class="card"><div class="label">Portfolio</div><div class="big">176 vehicles</div></div>
-      <div class="card hl" style="margin-top:24px"><div class="label">Apr 2025 → Oct 2026</div><div class="big">2 910k → 2 548k SEK</div></div>
-      <p style="font-size:28px">A view on top of the pipeline's own tables and formula. Real rates, synthetic prices.</p>
+      <div class="card hl" style="margin-top:24px"><div class="label">Apr 2025 → Oct 2026</div><div class="big">3 416k → 3 163k SEK</div></div>
+      <p style="font-size:28px">A view on top of the pipeline's own tables and formula. Real rates, synthetic prices. Annual figures, year 1.</p>
     </div>
   </div>
   <div class="foot"><span>Loan Profit ETL</span><span>9</span></div>
@@ -158,11 +158,11 @@
 
 <section class="slide">
   <div class="kicker">Testing and operations</div>
-  <h2>8 end-to-end tests <span class="acc">against a real SQL Server.</span></h2>
+  <h2>10 end-to-end tests <span class="acc">against a real SQL Server.</span></h2>
   <table>
     <tr><th>Scenario</th><th>What it proves</th></tr>
     <tr><td>Rate present / missing</td><td>Normal run; exact fallback warning with month and value</td></tr>
-    <tr><td>Formula, normalisation</td><td>Profit matches the formula to the öre; " electric " becomes Electric</td></tr>
+    <tr><td>Formula, risk margin, depreciation, normalisation</td><td>Profit matches the formula to the öre; risk tier adds to the margin; depreciation adds up; " electric " becomes Electric</td></tr>
     <tr><td>Rejects</td><td>Five bad rows, one per rule, rejected with the right reasons</td></tr>
     <tr><td>Re-run, missing file, mail failure</td><td>No duplicates; loud failure with nothing created; warning, not failure</td></tr>
   </table>
@@ -174,10 +174,10 @@
   <div class="kicker">Scope and next steps</div>
   <h2 style="margin-top:24px">What I'd build <span class="acc">next.</span></h2>
   <ul style="margin-top:34px">
-    <li style="color:#c8d3cc"><b style="color:#fff">Use the risk tier and depreciation tables.</b> Both are in the data model; the specified formula doesn't use them yet.</li>
+    <li style="color:#c8d3cc"><b style="color:#fff">Price the collateral.</b> Depreciation is shown per loan but doesn't move the margin; a lender would price on loan-to-value.</li>
     <li style="color:#c8d3cc"><b style="color:#fff">Alert on failure.</b> Route Agent job failures to an operator, not only to the log.</li>
     <li style="color:#c8d3cc"><b style="color:#fff">Real SMTP and a service account.</b> The pipeline mails a local sink today.</li>
-    <li style="color:#c8d3cc"><b style="color:#fff">Loan terms.</b> Price by term and amortisation instead of a flat rate.</li>
+    <li style="color:#c8d3cc"><b style="color:#fff">Loan terms.</b> Today it is year-1 interest on the full price; a real schedule needs a term, a down payment and amortisation.</li>
   </ul>
   <p style="font-size:30px;margin-top:40px">Started as an ETL assignment on the Data Engineer programme at Nackademin. The data layer, quality views, tests and CI are my additions.</p>
   <div class="foot"><span>David Färm · Data Engineering</span><span>github.com/DavidFarm/loan-profit-etl</span></div>

@@ -47,10 +47,10 @@
 <!-- 1. Hook -->
 <section class="slide dark">
   <span class="pill">ETL course · Nackademin</span>
-  <h1>What does a Riksbank rate cut cost a car-loan book?</h1>
-  <h1 class="acc" style="margin-top:0">Two cuts: 12.4% of estimated profit.</h1>
+  <h1>What does a STIBOR move cost a car-loan book?</h1>
+  <h1 class="acc" style="margin-top:0">18 months: −7.4% of estimated profit.</h1>
   <div class="dots"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i class="off"></i><i class="off"></i><i class="off"></i><i class="off"></i></div>
-  <p>A monthly SQL Server ETL that prices a vehicle portfolio from the live policy rate. Scheduled, logged and tested.</p>
+  <p>A monthly SQL Server ETL that prices a vehicle portfolio from STIBOR 3M. Scheduled, logged and tested.</p>
   <div class="foot"><span>David Färm · Data Engineering</span><span>swipe →</span></div>
 </section>
 
@@ -58,10 +58,10 @@
 <section class="slide">
   <span class="pill">The brief</span>
   <h2>An analyst ran these queries by hand.<br><span class="acc">Every month.</span></h2>
-  <p>A bank gets a vehicle file from an agency each month. Estimated profit per car depends on its energy class, a floating base rate and the bank's margin.</p>
+  <p>A bank gets a vehicle file from an agency each month. Estimated profit per car depends on its energy class, its credit risk and a floating base rate (STIBOR 3M).</p>
   <div class="card"><div class="label">Before</div><div class="big">Manual queries, monthly</div></div>
   <div class="card hl"><div class="label">After</div><div class="big mono" style="font-size:36px">SELECT * FROM<br>LoanProfitEstimates_202610;</div></div>
-  <p class="mono" style="font-size:30px;margin-top:40px">profit = price × (base rate + margin) / 100</p>
+  <p class="mono" style="font-size:30px;margin-top:40px">annual profit = price × (STIBOR + margin) / 100</p>
   <div class="foot"><span>David Färm · Loan ETL</span><span>2 / 9</span></div>
 </section>
 
@@ -79,7 +79,7 @@
     <div class="node g">LoanProfit<br>Estimates_yyyymm<small>rebuilt in one transaction</small></div>
   </div>
   <div class="row" style="margin-top:40px">
-    <div class="node">Riksbank API<small>policy rate by month</small></div>
+    <div class="node">STIBOR 3M<small>SFBF export, by month</small></div>
     <div class="node">Log table<small>every step, every warning</small></div>
     <div class="node">Mail<small>rows + table name</small></div>
   </div>
@@ -108,7 +108,7 @@
   <h2>No rate for this month?<br><span class="acc">Say so. Out loud.</span></h2>
   <div class="card" style="background:#1f2a25;border-color:#1f2a25;margin-top:44px">
     <div class="label" style="color:#e0b04a">WARNING · INTEREST_RATE</div>
-    <p class="mono" style="color:#e8efe9;margin-top:14px">Base interest rate for the current month is missing. Value from the previous month was used (2026-09-01, 1.75%).</p>
+    <p class="mono" style="color:#e8efe9;margin-top:14px">Base interest rate for the current month is missing. Value from the previous month was used (2026-09-01, 2.03%, STIBOR3M).</p>
   </div>
   <p>The job falls back to the most recent month, and writes down which month and which value. No rate at all? Hard stop, no guessing.</p>
   <p style="font-size:28px;color:#8a948e">(October's rate was left out on purpose to test this.)</p>
@@ -130,18 +130,18 @@
 <!-- 7. The answer -->
 <section class="slide">
   <span class="pill">The answer</span>
-  <h2>Two 25 bp cuts.<br><span class="acc">−12.4% estimated profit.</span></h2>
+  <h2>18 months of STIBOR 3M.<br><span class="acc">−7.4% estimated profit.</span></h2>
   <img src="../docs/rate_sensitivity_carousel.png" alt="" style="width:100%;max-height:640px;object-fit:contain;margin-top:36px;border-radius:18px;border:2px solid #d3dfd3">
-  <p style="font-size:30px;margin-top:24px">Same 176 vehicles, repriced at each month's real Riksbank rate. 2,910k → 2,548k SEK.</p>
+  <p style="font-size:30px;margin-top:24px">Same 176 vehicles, repriced at each month's STIBOR 3M. 3,416k → 3,163k SEK a year.</p>
   <div class="foot"><span>David Färm · Loan ETL</span><span>7 / 9</span></div>
 </section>
 
 <!-- 8. Proof -->
 <section class="slide">
   <span class="pill">Proof</span>
-  <h2>8 end-to-end tests.<br><span class="acc">Run it twice: same result.</span></h2>
+  <h2>10 end-to-end tests.<br><span class="acc">Run it twice: same result.</span></h2>
   <ul style="margin-top:44px">
-    <li><b>Formula</b> checked row by row</li>
+    <li><b>Formula</b>, risk margin and depreciation checked row by row</li>
     <li><b>Rate fallback</b> and its exact warning</li>
     <li><b>Rejects</b> counted per rule</li>
     <li><b>Missing file</b> fails loudly, creates nothing</li>
@@ -158,7 +158,7 @@
   <h1 class="acc" style="font-size:78px;margin-top:0">One that succeeds quietly with the wrong rate is a bug.</h1>
   <div class="dots"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
   <p>Code, tests and the full write-up:<br><b style="color:#fff">github.com/DavidFarm/loan-profit-etl</b></p>
-  <p style="font-size:28px">Rates and vehicle models are real (Riksbank, fueleconomy.gov). Prices and risk tiers are synthetic.</p>
+  <p style="font-size:28px">Rates and vehicle models are real (STIBOR 3M from SFBF, non-commercial education licence; fueleconomy.gov). Prices and risk tiers are synthetic.</p>
   <div class="foot"><span>David Färm · Data Engineering</span><span>9 / 9</span></div>
 </section>
 

@@ -24,8 +24,8 @@ GO
 
 CREATE OR ALTER PROCEDURE dbo.usp_LoanProfitEstimates
     @RunMonth       DATE          = NULL,                          -- NULL = current month
-    @MailProfile    SYSNAME       = N'LoanETL',
-    @MailRecipients NVARCHAR(500) = N'etl.analyst@loanetl.local'   -- local SMTP sink, see 01_setup_database_mail.sql
+    @MailProfile    SYSNAME       = NULL,   -- NULL = dbo.EtlSettings 'MailProfile' (live mail), else the local sink profile
+    @MailRecipients NVARCHAR(500) = NULL    -- NULL = dbo.EtlSettings 'MailRecipients', else the local sink address
 AS
 BEGIN
     SET NOCOUNT ON;
@@ -39,6 +39,8 @@ BEGIN
             @Target        NVARCHAR(300),
             @Rate          DECIMAL(5,2),
             @RateDate      DATE,
+            @RateSource    VARCHAR(30),
+            @TotalAmort    DECIMAL(14,2) = 0,
             @RowsRead      INT = 0,
             @RowsRejected  INT = 0,
             @RowsLoaded    INT = 0,
@@ -47,6 +49,10 @@ BEGIN
             @Sql           NVARCHAR(MAX),
             @Subject       NVARCHAR(255),
             @Body          NVARCHAR(MAX);
+
+    -- Mail target: explicit parameter, else the live settings (01b), else the local SMTP sink (01).
+    SET @MailProfile    = COALESCE(@MailProfile,    (SELECT Value FROM dbo.EtlSettings WHERE Name = 'MailProfile'),    N'LoanETL');
+    SET @MailRecipients = COALESCE(@MailRecipients, (SELECT Value FROM dbo.EtlSettings WHERE Name = 'MailRecipients'), N'etl.analyst@loanetl.local');
 
     -- Normalise to the first of the month so "current month" is unambiguous.
     SET @RunMonth   = DATEFROMPARTS(YEAR(COALESCE(@RunMonth, GETDATE())), MONTH(COALESCE(@RunMonth, GETDATE())), 1);
@@ -68,14 +74,15 @@ BEGIN
         END;
 
         -- 2. Base rate: this month's rate, else the most recent earlier month. No rate at all = hard stop.
-        SELECT TOP (1) @Rate = BaseInterestRate, @RateDate = EffectiveDate
+        --    The base rate is STIBOR 3M as fixed for the 1st of the month (see python\seed_tables.py).
+        SELECT TOP (1) @Rate = BaseInterestRate, @RateDate = EffectiveDate, @RateSource = COALESCE(RateSource, 'unknown')
         FROM dbo.InterestRates
         WHERE EffectiveDate >= @RunMonth AND EffectiveDate < DATEADD(MONTH, 1, @RunMonth)
         ORDER BY EffectiveDate DESC;
 
         IF @Rate IS NULL
         BEGIN
-            SELECT TOP (1) @Rate = BaseInterestRate, @RateDate = EffectiveDate
+            SELECT TOP (1) @Rate = BaseInterestRate, @RateDate = EffectiveDate, @RateSource = COALESCE(RateSource, 'unknown')
             FROM dbo.InterestRates
             WHERE EffectiveDate < @RunMonth
             ORDER BY EffectiveDate DESC;
@@ -87,12 +94,12 @@ BEGIN
             END;
 
             SET @Msg = N'Base interest rate for the current month is missing. Value from the previous month was used'
-                     + N' (' + CONVERT(NVARCHAR(10), @RateDate, 23) + N', ' + CONVERT(NVARCHAR(10), @Rate) + N'%).';
+                     + N' (' + CONVERT(NVARCHAR(10), @RateDate, 23) + N', ' + CONVERT(NVARCHAR(10), @Rate) + N'%, ' + @RateSource + N').';
             EXEC dbo.usp_EtlLog @RunID, @RunMonth, 'WARNING', 'INTEREST_RATE', @Msg;
         END
         ELSE
         BEGIN
-            SET @Msg = N'Using base interest rate ' + CONVERT(NVARCHAR(10), @Rate) + N'% effective '
+            SET @Msg = N'Using base interest rate ' + CONVERT(NVARCHAR(10), @Rate) + N'% (' + @RateSource + N') effective '
                      + CONVERT(NVARCHAR(10), @RateDate, 23) + N'.';
             EXEC dbo.usp_EtlLog @RunID, @RunMonth, 'INFO', 'INTEREST_RATE', @Msg;
         END;
@@ -112,6 +119,7 @@ BEGIN
         EXEC dbo.usp_EtlLog @RunID, @RunMonth, 'INFO', 'EXTRACT', @Msg, @RowsRead;
 
         -- 4. Transform: trim, fix types, decimal commas, and map energy class / risk tier onto the lookup spelling.
+        --    CarAge is clamped at 0 because next year's models are already on sale.
         UPDATE s
         SET RecordID_Clean         = TRY_CONVERT(INT, s.RecordID),
             CarModel_Clean         = NULLIF(LTRIM(RTRIM(s.CarModel)), ''),
@@ -119,10 +127,19 @@ BEGIN
             ManufactureYear_Clean  = TRY_CONVERT(INT, s.ManufactureYear),
             BasePrice_Clean        = TRY_CONVERT(DECIMAL(10,2), REPLACE(REPLACE(s.BasePrice, N' ', N''), N',', N'.')),
             FileMonth_Clean        = TRY_CONVERT(DATE, s.FileMonth),
-            CustomerRiskTier_Clean = t.RiskTier
+            CustomerRiskTier_Clean = t.RiskTier,
+            CarAge_Clean           = CASE WHEN TRY_CONVERT(INT, s.ManufactureYear) IS NULL THEN NULL
+                                          WHEN YEAR(@RunMonth) < TRY_CONVERT(INT, s.ManufactureYear) THEN 0
+                                          ELSE YEAR(@RunMonth) - TRY_CONVERT(INT, s.ManufactureYear) END
         FROM dbo.Stg_CarInformation s
         LEFT JOIN dbo.EnergyClassMargin m ON m.EnergyClass = LTRIM(RTRIM(s.EnergyClass))
         LEFT JOIN dbo.CreditRiskTier    t ON t.RiskTier    = LTRIM(RTRIM(s.CustomerRiskTier));
+
+        -- Annual depreciation rate for the car's age band (MaxAge NULL = open-ended).
+        UPDATE s
+        SET DepreciationRate_Clean = d.AnnualRate
+        FROM dbo.Stg_CarInformation s
+        JOIN dbo.DepreciationRates d ON s.CarAge_Clean >= d.MinAge AND (d.MaxAge IS NULL OR s.CarAge_Clean <= d.MaxAge);
 
         -- 5. Validate: first failing rule wins. Rejected rows stay in staging, flagged.
         UPDATE dbo.Stg_CarInformation
@@ -134,6 +151,7 @@ BEGIN
                 WHEN ManufactureYear_Clean IS NULL
                   OR ManufactureYear_Clean NOT BETWEEN 1980 AND YEAR(@RunMonth) + 1 THEN 'Invalid ManufactureYear'
                 WHEN BasePrice_Clean IS NULL OR BasePrice_Clean <= 0               THEN 'Missing or non-positive BasePrice'
+                WHEN DepreciationRate_Clean IS NULL                                THEN 'No depreciation band'
             END;
 
         ;WITH ranked AS (
@@ -152,27 +170,45 @@ BEGIN
         GROUP BY RejectReason;
 
         -- 6. Load: rebuild the output table in one transaction so the analyst never sees a half-built table.
-        --    EstimatedProfit = BasePrice * (BaseInterestRate + BankMargin) / 100
+        --    BankMargin = energy class margin + credit risk adjustment (the brief only names the energy margin; the
+        --    risk tier is priced on purpose). TotalInterestRate = BaseInterestRate + BankMargin.
+        --    EstimatedAnnualProfit = BasePrice * TotalInterestRate / 100: year-1 simple interest on the full price,
+        --    with the rate assumed flat for 12 months.
+        --    Depreciation does not touch margin or profit; it only sizes the minimum amortization that keeps the loan
+        --    at or below the car's value, so CustomerAnnualPayment = year-1 interest + that amortization.
         BEGIN TRANSACTION;
 
         SET @Sql = N'DROP TABLE IF EXISTS ' + @Target + N';
             SELECT s.RecordID_Clean AS RecordID, s.CarModel_Clean AS CarModel, s.EnergyClass_Clean AS EnergyClass,
                    s.ManufactureYear_Clean AS ManufactureYear, s.BasePrice_Clean AS BasePrice,
                    s.CustomerRiskTier_Clean AS CustomerRiskTier, @RunMonth AS FileMonth,
-                   @Rate AS BaseInterestRate, m.MarginRate AS BankMargin,
-                   CAST(@Rate + m.MarginRate AS DECIMAL(5,2)) AS TotalInterestRate,
-                   CAST(s.BasePrice_Clean * (@Rate + m.MarginRate) / 100 AS DECIMAL(12,2)) AS EstimatedProfit,
-                   @RateDate AS RateEffectiveDate, SYSDATETIME() AS ProcessedAt
+                   @Rate AS BaseInterestRate, m.MarginRate AS EnergyMargin, t.RiskAdjustment AS RiskAdjustment,
+                   CAST(m.MarginRate + t.RiskAdjustment AS DECIMAL(5,2)) AS BankMargin,
+                   CAST(@Rate + m.MarginRate + t.RiskAdjustment AS DECIMAL(5,2)) AS TotalInterestRate,
+                   c.Profit AS EstimatedAnnualProfit,
+                   s.CarAge_Clean AS CarAge, s.DepreciationRate_Clean AS DepreciationRate,
+                   CAST(s.BasePrice_Clean - c.Amortization AS DECIMAL(12,2)) AS DepreciatedValue,
+                   c.Amortization AS MinAnnualAmortization,
+                   CAST(c.Profit + c.Amortization AS DECIMAL(12,2)) AS CustomerAnnualPayment,
+                   @RateSource AS RateSource, @RateDate AS RateEffectiveDate, SYSDATETIME() AS ProcessedAt
             INTO ' + @Target + N'
             FROM dbo.Stg_CarInformation s
             JOIN dbo.EnergyClassMargin m ON m.EnergyClass = s.EnergyClass_Clean
+            JOIN dbo.CreditRiskTier    t ON t.RiskTier    = s.CustomerRiskTier_Clean
+            CROSS APPLY (SELECT Profit       = CAST(s.BasePrice_Clean * (@Rate + m.MarginRate + t.RiskAdjustment) / 100 AS DECIMAL(12,2)),
+                                Amortization = CAST(s.BasePrice_Clean * s.DepreciationRate_Clean AS DECIMAL(12,2))) c
             WHERE s.RejectReason IS NULL;
             SET @n = @@ROWCOUNT;
             ALTER TABLE ' + @Target + N' ALTER COLUMN RecordID INT NOT NULL;
             ALTER TABLE ' + @Target + N' ADD CONSTRAINT ' + QUOTENAME(N'PK_' + @TargetName) + N' PRIMARY KEY (RecordID);';
         EXEC sp_executesql @Sql,
-             N'@Rate DECIMAL(5,2), @RateDate DATE, @RunMonth DATE, @n INT OUTPUT',
-             @Rate = @Rate, @RateDate = @RateDate, @RunMonth = @RunMonth, @n = @RowsLoaded OUTPUT;
+             N'@Rate DECIMAL(5,2), @RateDate DATE, @RateSource VARCHAR(30), @RunMonth DATE, @n INT OUTPUT',
+             @Rate = @Rate, @RateDate = @RateDate, @RateSource = @RateSource, @RunMonth = @RunMonth,
+             @n = @RowsLoaded OUTPUT;
+
+        -- Separate batch: it can only be compiled once the table above exists with its new columns.
+        SET @Sql = N'SELECT @amort = COALESCE(SUM(MinAnnualAmortization), 0) FROM ' + @Target + N';';
+        EXEC sp_executesql @Sql, N'@amort DECIMAL(14,2) OUTPUT', @amort = @TotalAmort OUTPUT;
 
         COMMIT TRANSACTION;
 
@@ -185,10 +221,12 @@ BEGIN
         SET @Body = N'The LoanProfitEstimates job completed successfully.' + CHAR(13) + CHAR(10)
                   + N'Run month:        ' + @yyyymm + CHAR(13) + CHAR(10)
                   + N'Output table:     dbo.' + @TargetName + CHAR(13) + CHAR(10)
+                  + N'Base rate:        ' + CONVERT(NVARCHAR(10), @Rate) + N'% ' + @RateSource + N', effective ' + CONVERT(NVARCHAR(10), @RateDate, 23) + CHAR(13) + CHAR(10)
                   + N'Rows processed:   ' + CAST(@RowsRead AS NVARCHAR(20)) + CHAR(13) + CHAR(10)
                   + N'Rows loaded:      ' + CAST(@RowsLoaded AS NVARCHAR(20)) + CHAR(13) + CHAR(10)
                   + N'Rows rejected:    ' + CAST(@RowsRejected AS NVARCHAR(20)) + CHAR(13) + CHAR(10)
-                  + N'Warnings:         ' + CAST(@Warnings AS NVARCHAR(20)) + N' (see dbo.EtlLog, RunID ' + CAST(@RunID AS NVARCHAR(36)) + N')' + CHAR(13) + CHAR(10)
+                  + N'Min. amortization: ' + FORMAT(@TotalAmort, N'N0', N'en-US') + N' (year 1, all loans)' + CHAR(13) + CHAR(10)
+                  + N'Warnings:       ' + CAST(@Warnings AS NVARCHAR(20)) + N' (see dbo.EtlLog, RunID ' + CAST(@RunID AS NVARCHAR(36)) + N')' + CHAR(13) + CHAR(10)
                   + N'Query the result: SELECT * FROM ' + @TargetName + N';';
     END TRY
     BEGIN CATCH

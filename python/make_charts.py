@@ -16,9 +16,9 @@ SURFACE, INK, MUTED, GRID, SERIES = "#fcfcfb", "#0b0b0b", "#52514e", "#e6e5e0", 
 
 def fetch():
     cur = connect().cursor()
-    cur.execute("SELECT EffectiveDate, BaseInterestRate, Loans, EstimatedProfit, RateChange, ProfitChange "
+    cur.execute("SELECT EffectiveDate, BaseInterestRate, Loans, EstimatedAnnualProfit, RateChange, ProfitChange "
                 "FROM dbo.vw_RateSensitivity ORDER BY EffectiveDate")
-    return [(r.EffectiveDate, float(r.BaseInterestRate), r.Loans, float(r.EstimatedProfit),
+    return [(r.EffectiveDate, float(r.BaseInterestRate), r.Loans, float(r.EstimatedAnnualProfit),
              None if r.RateChange is None else float(r.RateChange),
              None if r.ProfitChange is None else float(r.ProfitChange)) for r in cur.fetchall()]
 
@@ -33,17 +33,20 @@ def render(rows, out_name, figsize, scale=1.0, titled=True):
     ax.step(months, profit, where="post", color=SERIES, linewidth=2.4 * scale, solid_joinstyle="round")
     ax.plot(months[-1], profit[-1], "o", color=SERIES, markersize=8 * scale, markeredgecolor=SURFACE, markeredgewidth=2)
 
-    # Direct labels on the moves: the rate change that caused each step, and what it cost.
-    for month, rate, _, p, d_rate, d_profit in rows:
-        if d_rate:
-            ax.annotate(f"policy rate {rate - d_rate:.2f}% → {rate:.2f}%\n{d_profit / 1000:+,.0f} k SEK".replace(",", " "),
-                        xy=(month, p / 1000), xytext=(14 * scale, 26 * scale), textcoords="offset points", color=INK, fontsize=10 * scale,
-                        arrowprops=dict(arrowstyle="-", color=MUTED, lw=0.8))
+    # Direct labels on the two biggest moves: the rate change that caused each step, and what it did to profit.
+    # A step up is labelled above-left and a step down below-right, which keeps the text clear of the line.
+    biggest = sorted((r for r in rows if r[4]), key=lambda r: abs(r[5]), reverse=True)[:2]
+    for month, rate, _, p, d_rate, d_profit in biggest:
+        up = d_profit > 0
+        ax.annotate(f"STIBOR 3M {rate - d_rate:.2f}% → {rate:.2f}%\n{d_profit / 1000:+,.0f} k SEK".replace(",", " "),
+                    xy=(month, p / 1000), xytext=((-14 if up else 14) * scale, (30 if up else -30) * scale),
+                    textcoords="offset points", ha="right" if up else "left", va="bottom" if up else "top",
+                    color=INK, fontsize=10 * scale, arrowprops=dict(arrowstyle="-", color=MUTED, lw=0.8))
     ax.annotate(f"{profit[-1]:,.0f} k SEK".replace(",", " "), xy=(months[-1], profit[-1]), xytext=(-8, 14),
                 textcoords="offset points", ha="right", color=INK, fontsize=10 * scale, fontweight="bold")
 
-    ax.set_ylim(profit[-1] * 0.9, profit[0] * 1.04)
-    ax.set_ylabel("Estimated profit, SEK thousands", color=MUTED, fontsize=10 * scale)
+    ax.set_ylim(min(profit) * 0.95, max(profit) * 1.06)
+    ax.set_ylabel("Estimated annual profit, SEK thousands", color=MUTED, fontsize=10 * scale)
     ax.yaxis.set_major_formatter(lambda v, _: f"{v:,.0f}".replace(",", " "))
     ax.xaxis.set_major_locator(mdates.MonthLocator(interval=3 if scale == 1 else 6))
     ax.xaxis.set_major_formatter(mdates.DateFormatter("%b %Y"))
@@ -54,9 +57,10 @@ def render(rows, out_name, figsize, scale=1.0, titled=True):
     ax.spines["bottom"].set_color(GRID)
 
     if titled:
-        fig.text(0.06, 0.95, "Two 25 bp Riksbank cuts took 12% off this loan book's estimated profit",
+        change = (rows[-1][3] / rows[0][3] - 1) * 100
+        fig.text(0.06, 0.95, f"STIBOR 3M moved this loan book's estimated annual profit {change:+.0f}% in {len(rows) - 1} months",
                  color=INK, fontsize=14, fontweight="bold", ha="left", va="top")
-        fig.text(0.06, 0.895, f"Same {rows[0][2]} vehicles repriced at each month's real policy rate (synthetic prices, real rates)",
+        fig.text(0.06, 0.895, f"Same {rows[0][2]} vehicles repriced at each month's STIBOR 3M (synthetic prices, real rates)",
                  color=MUTED, fontsize=10, ha="left", va="top")
         fig.subplots_adjust(left=0.1, right=0.97, top=0.82, bottom=0.1)
     else:

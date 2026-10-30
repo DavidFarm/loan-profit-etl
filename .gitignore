@@ -7,3 +7,6 @@ data/
 Documents/
 *.eml
 *.docx
+
+# Credit Desk workbook: the refreshed file embeds rate data (STIBOR), so it is built locally, not published
+excel/

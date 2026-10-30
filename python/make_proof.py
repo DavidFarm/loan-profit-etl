@@ -84,15 +84,15 @@ def main():
     latest = cur.execute("SELECT TOP 1 RunMonth FROM dbo.vw_RunSummary WHERE Status <> 'FAILED' ORDER BY StartedAt DESC").fetchval()
     target = f"LoanProfitEstimates_{latest:%Y%m}"
     out = cur.execute(f"SELECT TOP 8 RecordID, CarModel, EnergyClass, ManufactureYear, BasePrice, BaseInterestRate, BankMargin, "
-                      f"TotalInterestRate, EstimatedProfit FROM dbo.[{target}] ORDER BY RecordID").fetchall()
+                      f"TotalInterestRate, EstimatedAnnualProfit FROM dbo.[{target}] ORDER BY RecordID").fetchall()
     screenshot(
         f"<h2>SELECT TOP 8 * FROM {target}</h2>"
         + table(["RecordID", "CarModel", "EnergyClass", "ManufactureYear", "BasePrice", "BaseInterestRate", "BankMargin",
-                 "TotalInterestRate", "EstimatedProfit"],
+                 "TotalInterestRate", "EstimatedAnnualProfit"],
                 [[r.RecordID, r.CarModel, r.EnergyClass, r.ManufactureYear, float(r.BasePrice), float(r.BaseInterestRate),
-                  float(r.BankMargin), float(r.TotalInterestRate), float(r.EstimatedProfit)] for r in out],
+                  float(r.BankMargin), float(r.TotalInterestRate), float(r.EstimatedAnnualProfit)] for r in out],
                 numeric=("RecordID", "ManufactureYear", "BasePrice", "BaseInterestRate", "BankMargin", "TotalInterestRate",
-                         "EstimatedProfit")),
+                         "EstimatedAnnualProfit")),
         "proof_output.png")
 
     newest = max((ROOT / "data" / "mail").glob("*.eml"), key=lambda p: p.stat().st_mtime)

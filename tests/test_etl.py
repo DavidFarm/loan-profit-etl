@@ -28,8 +28,11 @@ CAR_ROWS = [
     (8, "Zero price", "Gasoline", 2020, 0, "A"),
     (9, "Bad year", "Gasoline", 1900, 100000.00, "A"),
 ]
-# Expected profit = BasePrice * (rate + margin) / 100, with a 3.00% base rate.
-EXPECTED_PROFIT_AT_3_PCT = {1: 16000.00, 2: 13500.00, 3: 11000.00, 4: 13750.00}
+# Expected annual profit = BasePrice * (rate + energy margin + risk adjustment) / 100, with a 3.00% base rate:
+#   1: 400000 * (3 + 1.0 + 0.0) %   2: 300000 * (3 + 1.5 + 0.5) %   3: 200000 * (3 + 2.5 + 1.0) %   4: 250000 * (3 + 2.5 + 2.0) %
+EXPECTED_PROFIT_AT_3_PCT = {1: 16000.00, 2: 15000.00, 3: 13000.00, 4: 18750.00}
+# Run year 2030, so the car ages are 6, 8, 10 and 11: bands 6-9 lose 10 %, 10+ lose 7 % of the price per year.
+EXPECTED_AMORTIZATION = {1: 40000.00, 2: 30000.00, 3: 14000.00, 4: 17500.00}
 
 
 @pytest.fixture(scope="module")
@@ -60,7 +63,8 @@ def make_car_file(db, yyyymm):
 def set_rate(db, effective_date, rate):
     cur = db.cursor()
     cur.execute("DELETE FROM dbo.InterestRates WHERE EffectiveDate = ?", effective_date)
-    cur.execute("INSERT INTO dbo.InterestRates (EffectiveDate, BaseInterestRate) VALUES (?, ?)", effective_date, rate)
+    cur.execute("INSERT INTO dbo.InterestRates (EffectiveDate, BaseInterestRate, RateSource) VALUES (?, ?, 'TEST')",
+                effective_date, rate)
 
 
 def run_etl(db, month):
@@ -97,14 +101,34 @@ def test_missing_rate_falls_back_to_previous_month_and_warns(db):
 
 
 def test_estimated_profit_matches_formula(db):
-    profits = dict(db.cursor().execute("SELECT RecordID, EstimatedProfit FROM dbo.LoanProfitEstimates_203001").fetchall())
+    profits = dict(db.cursor().execute("SELECT RecordID, EstimatedAnnualProfit FROM dbo.LoanProfitEstimates_203001").fetchall())
     assert {k: float(v) for k, v in profits.items()} == EXPECTED_PROFIT_AT_3_PCT
 
 
 def test_energy_class_is_normalised(db):
-    # " electric " (padded, lower case) must come out as the canonical 'Electric' with its 1.0% margin.
-    row = db.cursor().execute("SELECT EnergyClass, BankMargin FROM dbo.LoanProfitEstimates_203001 WHERE RecordID = 1").fetchone()
-    assert row.EnergyClass == "Electric" and float(row.BankMargin) == 1.0
+    # " electric " (padded, lower case) must come out as the canonical 'Electric' with its 1.0% margin;
+    # tier "a" likewise comes out as "A" with no risk adjustment.
+    row = db.cursor().execute(
+        "SELECT EnergyClass, CustomerRiskTier, EnergyMargin, BankMargin FROM dbo.LoanProfitEstimates_203001 WHERE RecordID = 1").fetchone()
+    assert (row.EnergyClass, row.CustomerRiskTier) == ("Electric", "A")
+    assert float(row.EnergyMargin) == 1.0 and float(row.BankMargin) == 1.0
+
+
+def test_bank_margin_adds_credit_risk_adjustment_to_energy_margin(db):
+    # Record 4: Diesel 2.5 + tier D 2.0 = 4.5, so the total rate at a 3.00% base is 7.5%.
+    row = db.cursor().execute(
+        "SELECT EnergyMargin, RiskAdjustment, BankMargin, TotalInterestRate FROM dbo.LoanProfitEstimates_203001 WHERE RecordID = 4").fetchone()
+    assert [float(v) for v in row] == [2.5, 2.0, 4.5, 7.5]
+
+
+def test_depreciation_columns_and_year_one_payment(db):
+    rows = db.cursor().execute(
+        "SELECT RecordID, BasePrice, EstimatedAnnualProfit, DepreciatedValue, MinAnnualAmortization, CustomerAnnualPayment "
+        "FROM dbo.LoanProfitEstimates_203001").fetchall()
+    assert {r.RecordID: float(r.MinAnnualAmortization) for r in rows} == EXPECTED_AMORTIZATION
+    for r in rows:
+        assert r.DepreciatedValue + r.MinAnnualAmortization == r.BasePrice
+        assert r.CustomerAnnualPayment == r.EstimatedAnnualProfit + r.MinAnnualAmortization
 
 
 def test_rejects_are_flagged_with_reasons_and_logged(db):
