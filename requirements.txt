@@ -2,4 +2,4 @@ requests==2.32.3
 pyodbc==5.2.0
 openpyxl==3.1.5
 aiosmtpd==1.4.6
-pywin32==312
+pywin32==312; sys_platform == "win32"
